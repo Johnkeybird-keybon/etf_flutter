@@ -51,30 +51,61 @@ class TransactionService {
     double? min,
     double? max,
     String? keyword,
+    String sortBy = 'date', // <-- ADDED
+    bool isAscending = false, // <-- ADDED
   }) async {
     final where = <String>['t.user_id = ?'];
     final args = <Object?>[userId];
 
-    if (from != null)     { where.add('t.txn_date >= ?');   args.add(Formats.date(from)); }
-    if (to != null)       { where.add('t.txn_date <= ?');   args.add(Formats.date(to)); }
-    if (categoryId != null) { where.add('t.category_id = ?'); args.add(categoryId); }
-    if (type != null)     { where.add('t.type = ?');        args.add(type.dbValue); }
-    if (min != null)      { where.add('t.amount >= ?');     args.add(min); }
-    if (max != null)      { where.add('t.amount <= ?');     args.add(max); }
+    if (from != null) {
+      where.add('t.txn_date >= ?');
+      args.add(Formats.date(from));
+    }
+    if (to != null) {
+      where.add('t.txn_date <= ?');
+      args.add(Formats.date(to));
+    }
+    if (categoryId != null) {
+      where.add('t.category_id = ?');
+      args.add(categoryId);
+    }
+    if (type != null) {
+      where.add('t.type = ?');
+      args.add(type.dbValue);
+    }
+    if (min != null) {
+      where.add('t.amount >= ?');
+      args.add(min);
+    }
+    if (max != null) {
+      where.add('t.amount <= ?');
+      args.add(max);
+    }
     if (keyword != null && keyword.trim().isNotEmpty) {
       where.add('t.description LIKE ?');
       args.add('%${keyword.trim()}%');
     }
 
-    final sql = '$_base WHERE ${where.join(' AND ')} '
-        'ORDER BY t.txn_date DESC, t.transaction_id DESC';
+    // Dynamic Sorting Logic
+    final direction = isAscending ? 'ASC' : 'DESC';
+    String orderBy = 't.txn_date $direction, t.transaction_id $direction';
+
+    if (sortBy == 'amount') {
+      orderBy = 't.amount $direction, t.transaction_id $direction';
+    } else if (sortBy == 'category') {
+      orderBy = 'c.name $direction, t.transaction_id $direction';
+    } else if (sortBy == 'type') {
+      orderBy = 't.type $direction, t.transaction_id $direction';
+    }
+
+    final sql = '$_base WHERE ${where.join(' AND ')} ORDER BY $orderBy';
     final rows = await DatabaseHelper.db.rawQuery(sql, args);
     return rows.map(Transaction.fromMap).toList();
   }
 
   Future<double> monthlyTotal(int userId, TxType type, int year, int month) async {
     final from = DateTime(year, month, 1);
-    final to   = DateTime(year, month + 1, 1);
+    final to = DateTime(year, month + 1, 1);
     final rows = await DatabaseHelper.db.rawQuery('''
       SELECT COALESCE(SUM(amount),0) AS total FROM transactions
       WHERE user_id = ? AND type = ? AND txn_date >= ? AND txn_date < ?
@@ -84,7 +115,7 @@ class TransactionService {
 
   Future<Map<String, double>> expenseByCategory(int userId, int year, int month) async {
     final from = DateTime(year, month, 1);
-    final to   = DateTime(year, month + 1, 1);
+    final to = DateTime(year, month + 1, 1);
     final rows = await DatabaseHelper.db.rawQuery('''
       SELECT c.name, SUM(t.amount) AS total
       FROM transactions t
@@ -93,7 +124,9 @@ class TransactionService {
         AND t.txn_date >= ? AND t.txn_date < ?
       GROUP BY c.name ORDER BY total DESC
     ''', [userId, Formats.date(from), Formats.date(to)]);
-    return { for (final r in rows)
-      r['name'] as String: (r['total'] as num).toDouble() };
+    return {
+      for (final r in rows)
+        r['name'] as String: (r['total'] as num).toDouble()
+    };
   }
 }

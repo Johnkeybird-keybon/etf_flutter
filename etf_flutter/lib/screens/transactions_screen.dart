@@ -20,11 +20,14 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
   final _fromCtrl = TextEditingController();
   final _toCtrl = TextEditingController();
-  final _minCtrl = TextEditingController();
-  final _maxCtrl = TextEditingController();
-  final _keywordCtrl = TextEditingController();
+  
   int? _categoryId;
   TxType? _type;
+  
+  // Sorting State
+  String _sortBy = 'date';
+  bool _isAscending = false;
+
   List<Category> _categories = [];
   List<Transaction> _data = [];
   bool _loading = false;
@@ -41,6 +44,19 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     if (mounted) setState(() => _categories = list);
   }
 
+  Future<void> _pickDate(TextEditingController controller) async {
+    final initialDate = DateTime.tryParse(controller.text) ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      controller.text = Formats.date(picked);
+    }
+  }
+
   Future<void> _search() async {
     setState(() => _loading = true);
     final userId = context.read<AuthProvider>().user!.id;
@@ -51,9 +67,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         to: DateTime.tryParse(_toCtrl.text.trim()),
         categoryId: _categoryId,
         type: _type,
-        min: double.tryParse(_minCtrl.text),
-        max: double.tryParse(_maxCtrl.text),
-        keyword: _keywordCtrl.text,
+        sortBy: _sortBy,
+        isAscending: _isAscending,
       );
       if (!mounted) return;
       setState(() {
@@ -68,12 +83,11 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   void _reset() {
     _fromCtrl.clear();
     _toCtrl.clear();
-    _minCtrl.clear();
-    _maxCtrl.clear();
-    _keywordCtrl.clear();
     setState(() {
       _categoryId = null;
       _type = null;
+      _sortBy = 'date';
+      _isAscending = false;
     });
     _search();
   }
@@ -104,11 +118,28 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       ),
     );
     if (ok != true) return;
-    if (!mounted) return; // <--- FIX: Async gap check
+    if (!mounted) return; 
 
     final userId = context.read<AuthProvider>().user!.id;
     await _txService.delete(userId, t.id!);
     _search();
+  }
+
+  Widget _buildDateInput(String label, TextEditingController controller) {
+    return SizedBox(
+      width: 150,
+      child: TextFormField(
+        controller: controller,
+        readOnly: true,
+        onTap: () => _pickDate(controller),
+        decoration: InputDecoration(
+          labelText: label,
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+          suffixIcon: const Icon(Icons.calendar_today, size: 16),
+        ),
+      ),
+    );
   }
 
   @override
@@ -124,131 +155,184 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // --- Filter & Sort Bar ---
+          Card(
             child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Wrap(spacing: 8, runSpacing: 8, children: [
-            SizedBox(
-                width: 140,
-                child: TextField(
-                  controller: _fromCtrl,
-                  decoration: const InputDecoration(
-                      labelText: 'From (yyyy-MM-dd)', isDense: true),
-                )),
-            SizedBox(
-                width: 140,
-                child: TextField(
-                  controller: _toCtrl,
-                  decoration: const InputDecoration(
-                      labelText: 'To (yyyy-MM-dd)', isDense: true),
-                )),
-            SizedBox(
-                width: 160,
-                child: DropdownButtonFormField<int?>(
-                  // ignore: deprecated_member_use
-                  value: _categoryId,
-                  decoration:
-                      const InputDecoration(labelText: 'Category', isDense: true),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('All')),
-                    ..._categories.map((c) =>
-                        DropdownMenuItem(value: c.id, child: Text(c.name))),
-                  ],
-                  onChanged: (v) => setState(() => _categoryId = v),
-                )),
-            SizedBox(
-                width: 130,
-                child: DropdownButtonFormField<TxType?>(
-                  // ignore: deprecated_member_use
-                  value: _type,
-                  decoration:
-                      const InputDecoration(labelText: 'Type', isDense: true),
-                  items: const [
-                    DropdownMenuItem(value: null, child: Text('All')),
-                    DropdownMenuItem(value: TxType.income, child: Text('INCOME')),
-                    DropdownMenuItem(
-                        value: TxType.expense, child: Text('EXPENSE')),
-                  ],
-                  onChanged: (v) => setState(() => _type = v),
-                )),
-            SizedBox(
-                width: 100,
-                child: TextField(
-                    controller: _minCtrl,
-                    decoration: const InputDecoration(
-                        labelText: 'Min', isDense: true))),
-            SizedBox(
-                width: 100,
-                child: TextField(
-                    controller: _maxCtrl,
-                    decoration: const InputDecoration(
-                        labelText: 'Max', isDense: true))),
-            SizedBox(
-                width: 160,
-                child: TextField(
-                    controller: _keywordCtrl,
-                    onSubmitted: (_) => _search(),
-                    decoration: const InputDecoration(
-                        labelText: 'Keyword', isDense: true))),
-            FilledButton.icon(
-                onPressed: _search,
-                icon: const Icon(Icons.search),
-                label: const Text('Search')),
-            OutlinedButton(onPressed: _reset, child: const Text('Reset')),
-          ]),
-        )),
-        const SizedBox(height: 12),
-        Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _data.isEmpty
-                  ? const Center(child: Text('No transactions found.'))
-                  : Card(
-                      child: SingleChildScrollView(
-                          child: SizedBox(
-                              width: double.infinity,
-                              child: DataTable(
-                                columns: const [
-                                  DataColumn(label: Text('Date')),
-                                  DataColumn(label: Text('Type')),
-                                  DataColumn(label: Text('Category')),
-                                  DataColumn(label: Text('Amount')),
-                                  DataColumn(label: Text('Description')),
-                                  DataColumn(label: Text('')),
-                                ],
-                                rows: _data.map((t) {
-                                  return DataRow(cells: [
-                                    DataCell(Text(Formats.date(t.date))),
-                                    DataCell(Text(t.type.label)),
-                                    DataCell(Text(t.categoryName)),
-                                    DataCell(Text(Formats.money(t.amount))),
-                                    DataCell(Text(t.description)),
-                                    DataCell(Row(children: [
-                                      IconButton(
-                                          onPressed: () => _openDialog(t),
-                                          icon: const Icon(Icons.edit, size: 18)),
-                                      IconButton(
-                                          onPressed: () => _delete(t),
-                                          icon: const Icon(Icons.delete,
-                                              size: 18, color: Colors.red)),
-                                    ])),
-                                  ]);
-                                }).toList(),
-                              )))),
-        ),
-        const SizedBox(height: 8),
-        Row(children: [
-          FilledButton.icon(
-              onPressed: () => _openDialog(null),
-              icon: const Icon(Icons.add),
-              label: const Text('Add Transaction')),
-          const Spacer(),
-          Text(
-              'Showing ${_data.length}  |  Income: ${Formats.money(totalIncome)}  |  '
-              'Expense: ${Formats.money(totalExpense)}'),
-        ]),
-      ]),
+              padding: const EdgeInsets.all(12),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _buildDateInput('From', _fromCtrl),
+                  _buildDateInput('To', _toCtrl),
+                  
+                  // Category Filter
+                  SizedBox(
+                    width: 150,
+                    child: DropdownButtonFormField<int?>(
+                      // ignore: deprecated_member_use
+                      value: _categoryId,
+                      isExpanded: true, 
+                      decoration: const InputDecoration(
+                        labelText: 'Category',
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                      ),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('All')),
+                        ..._categories.map((c) =>
+                            DropdownMenuItem(value: c.id, child: Text(c.name))),
+                      ],
+                      onChanged: (v) => setState(() => _categoryId = v),
+                    ),
+                  ),
+
+                  // Type Filter
+                  SizedBox(
+                    width: 120,
+                    child: DropdownButtonFormField<TxType?>(
+                      // ignore: deprecated_member_use
+                      value: _type,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Type',
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: null, child: Text('All')),
+                        DropdownMenuItem(value: TxType.income, child: Text('INCOME')),
+                        DropdownMenuItem(value: TxType.expense, child: Text('EXPENSE')),
+                      ],
+                      onChanged: (v) => setState(() => _type = v),
+                    ),
+                  ),
+
+                  const SizedBox(width: 8), // Spacer before sorting
+
+                  // Sort By Dropdown
+                  SizedBox(
+                    width: 140,
+                    child: DropdownButtonFormField<String>(
+                      // ignore: deprecated_member_use
+                      value: _sortBy,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Sort By',
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'date', child: Text('Date')),
+                        DropdownMenuItem(value: 'amount', child: Text('Amount')),
+                        DropdownMenuItem(value: 'category', child: Text('Category')),
+                        DropdownMenuItem(value: 'type', child: Text('Type')),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) {
+                          setState(() => _sortBy = v);
+                          _search();
+                        }
+                      },
+                    ),
+                  ),
+
+                  // Ascending / Descending Toggle
+                  IconButton.filledTonal(
+                    onPressed: () {
+                      setState(() => _isAscending = !_isAscending);
+                      _search();
+                    },
+                    icon: Icon(_isAscending ? Icons.arrow_upward : Icons.arrow_downward),
+                    tooltip: _isAscending ? 'Ascending' : 'Descending',
+                  ),
+
+                  SizedBox(
+                    height: 48, 
+                    child: FilledButton.icon(
+                      onPressed: _search,
+                      icon: const Icon(Icons.search),
+                      label: const Text('Apply'),
+                    ),
+                  ),
+                  SizedBox(
+                    height: 48,
+                    child: OutlinedButton(
+                      onPressed: _reset, 
+                      child: const Text('Reset'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // --- Data Table ---
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _data.isEmpty
+                    ? const Center(child: Text('No transactions found.'))
+                    : Card(
+                        child: SingleChildScrollView(
+                            child: SizedBox(
+                                width: double.infinity,
+                                child: DataTable(
+                                  columns: const [
+                                    DataColumn(label: Text('Date')),
+                                    DataColumn(label: Text('Type')),
+                                    DataColumn(label: Text('Category')),
+                                    DataColumn(label: Text('Amount')),
+                                    DataColumn(label: Text('Description')),
+                                    DataColumn(label: Text('')),
+                                  ],
+                                  rows: _data.map((t) {
+                                    return DataRow(cells: [
+                                      DataCell(Text(Formats.date(t.date))),
+                                      DataCell(Text(t.type.label)),
+                                      DataCell(Text(t.categoryName)),
+                                      DataCell(Text(Formats.money(t.amount))),
+                                      DataCell(Text(t.description)),
+                                      DataCell(Row(children: [
+                                        IconButton(
+                                            onPressed: () => _openDialog(t),
+                                            icon: const Icon(Icons.edit, size: 18)),
+                                        IconButton(
+                                            onPressed: () => _delete(t),
+                                            icon: const Icon(Icons.delete,
+                                                size: 18, color: Colors.red)),
+                                      ])),
+                                    ]);
+                                  }).toList(),
+                                )))),
+          ),
+          const SizedBox(height: 12),
+
+          // --- Bottom Action Bar ---
+          Row(
+            children: [
+              FilledButton.icon(
+                  onPressed: () => _openDialog(null),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Transaction')),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  'Showing ${_data.length}  |  Income: ${Formats.money(totalIncome)}  |  Expense: ${Formats.money(totalExpense)}',
+                  textAlign: TextAlign.right,
+                  overflow: TextOverflow.ellipsis, 
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

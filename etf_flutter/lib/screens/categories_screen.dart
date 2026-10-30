@@ -29,7 +29,8 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     });
   }
 
-  Future<void> _openDialog(Category? existing) async {
+   Future<void> _openDialog(Category? existing) async {
+    final formKey = GlobalKey<FormState>();
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
     TxType type = existing?.type ?? TxType.expense;
 
@@ -38,33 +39,52 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) => AlertDialog(
           title: Text(existing == null ? 'Add Category' : 'Edit Category'),
-          content: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(labelText: 'Name'),
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<TxType>(
-              // ignore: deprecated_member_use
-              value: type,
-              decoration: const InputDecoration(labelText: 'Type'),
-              items: const [
-                DropdownMenuItem(value: TxType.income, child: Text('INCOME')),
-                DropdownMenuItem(value: TxType.expense, child: Text('EXPENSE')),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(
+                      labelText: 'Name', border: OutlineInputBorder()),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Category name is required';
+                    }
+                    if (v.trim().length > 50) {
+                      return 'Name is too long (max 50 chars)';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<TxType>(
+                  // ignore: deprecated_member_use
+                  value: type,
+                  decoration: const InputDecoration(
+                      labelText: 'Type', border: OutlineInputBorder()),
+                  items: const [
+                    DropdownMenuItem(value: TxType.income, child: Text('INCOME')),
+                    DropdownMenuItem(value: TxType.expense, child: Text('EXPENSE')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) setSt(() => type = v);
+                  },
+                ),
               ],
-              onChanged: (v) {
-                if (v != null) {
-                  setSt(() => type = v);
-                }
-              },
             ),
-          ]),
+          ),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
                 child: const Text('Cancel')),
             FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
+                onPressed: () {
+                  if (formKey.currentState!.validate()) {
+                    Navigator.pop(ctx, true);
+                  }
+                },
                 child: const Text('Save')),
           ],
         ),
@@ -74,7 +94,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     if (ok != true) return;
 
     final name = nameCtrl.text.trim();
-    if (name.isEmpty) return;
 
     try {
       if (existing == null) {
@@ -84,10 +103,13 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       }
       _load();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Save failed: $e')));
-      }
+      if (!mounted) return;
+      // Catch UNIQUE constraint failure specifically for duplicate names
+      final errorMsg = e.toString().contains('UNIQUE') 
+          ? 'A category with this name already exists.' 
+          : 'Save failed: $e';
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(errorMsg)));
     }
   }
 

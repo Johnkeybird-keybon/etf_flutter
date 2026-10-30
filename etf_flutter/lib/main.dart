@@ -15,12 +15,21 @@ Future<void> main() async {
 
 class EtfApp extends StatelessWidget {
   const EtfApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'ETF - Expense Tracker',
-      theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
-                       useMaterial3: true),
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+        useMaterial3: true,
+        inputDecorationTheme: const InputDecorationTheme(
+          border: OutlineInputBorder(),
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: Colors.green, width: 2),
+          ),
+        ),
+      ),
       home: const LoginScreen(),
       debugShowCheckedModeBanner: false,
     );

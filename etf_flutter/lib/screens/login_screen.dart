@@ -11,6 +11,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _authService = AuthService();
@@ -18,7 +19,12 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
 
   Future<void> _login() async {
-    setState(() { _loading = true; _error = null; });
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final user = await _authService.authenticate(
           _emailCtrl.text.trim(), _passwordCtrl.text);
@@ -28,8 +34,8 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
       context.read<AuthProvider>().login(user);
-      Navigator.pushReplacement(context,
-          MaterialPageRoute(builder: (_) => const MainScreen()));
+      Navigator.pushReplacement(
+          context, MaterialPageRoute(builder: (_) => const MainScreen()));
     } catch (e) {
       if (mounted) setState(() => _error = 'Error: $e');
     } finally {
@@ -47,37 +53,77 @@ class _LoginScreenState extends State<LoginScreen> {
             margin: const EdgeInsets.all(24),
             child: Padding(
               padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('Expense Tracker & Personal Finance',
-                      style: Theme.of(context).textTheme.titleLarge,
-                      textAlign: TextAlign.center),
-                  const SizedBox(height: 24),
-                  TextField(controller: _emailCtrl,
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text('Expense Tracker & Personal Finance',
+                        style: Theme.of(context).textTheme.titleLarge,
+                        textAlign: TextAlign.center),
+                    const SizedBox(height: 24),
+                    TextFormField(
+                      controller: _emailCtrl,
+                      keyboardType: TextInputType.emailAddress,
                       decoration: const InputDecoration(
-                          labelText: 'Email', border: OutlineInputBorder())),
-                  const SizedBox(height: 12),
-                  TextField(controller: _passwordCtrl, obscureText: true,
-                      onSubmitted: (_) => _login(),
+                        labelText: 'Email',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.email),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Email is required';
+                        }
+                        final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+                        if (!emailRegex.hasMatch(value.trim())) {
+                          return 'Enter a valid email address';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _passwordCtrl,
+                      obscureText: true,
+                      onFieldSubmitted: (_) => _loading ? null : _login(),
                       decoration: const InputDecoration(
-                          labelText: 'Password', border: OutlineInputBorder())),
-                  const SizedBox(height: 8),
-                  if (_error != null)
-                    Text(_error!, style: const TextStyle(color: Colors.red)),
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: _loading ? null : _login,
-                    child: _loading
-                        ? const CircularProgressIndicator()
-                        : const Text('Login'),
-                  ),
-                  const SizedBox(height: 12),
-                  Text('Default: admin@etf.com / admin123',
-                      style: Theme.of(context).textTheme.bodySmall,
-                      textAlign: TextAlign.center),
-                ],
+                        labelText: 'Password',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.lock),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Password is required';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Text(_error!,
+                            style: const TextStyle(color: Colors.red),
+                            textAlign: TextAlign.center),
+                      ),
+                    FilledButton(
+                      onPressed: _loading ? null : _login,
+                      style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16)),
+                      child: _loading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('Login'),
+                    ),
+                    const SizedBox(height: 16),
+                    Text('Default: admin@etf.com / admin123',
+                        style: Theme.of(context).textTheme.bodySmall,
+                        textAlign: TextAlign.center),
+                  ],
+                ),
               ),
             ),
           ),

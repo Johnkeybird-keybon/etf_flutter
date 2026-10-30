@@ -22,10 +22,12 @@ class AuthService {
     return rows.isNotEmpty;
   }
 
-  Future<void> updateCredentials(int userId, String email, String? newPassword) async {
-    final values = <String, dynamic>{'email': email};
-    if (newPassword != null) values['password_hash'] = hashPassword(newPassword);
-    await DatabaseHelper.db.update('users', values,
-        where: 'user_id = ?', whereArgs: [userId]);
+  Future<void> updatePassword(int userId, String newPassword) async {
+    await DatabaseHelper.db.update(
+      'users',
+      {'password_hash': hashPassword(newPassword)},
+      where: 'user_id = ?',
+      whereArgs: [userId],
+    );
   }
 }

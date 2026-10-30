@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/budget.dart';
 import '../models/category.dart';
@@ -53,6 +54,7 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
       return;
     }
 
+    final formKey = GlobalKey<FormState>();
     int categoryId = existing?.categoryId ?? categories.first.id;
     final amountCtrl = TextEditingController(
       text: existing?.limit.toStringAsFixed(2) ?? '',
@@ -63,54 +65,68 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) => AlertDialog(
           title: const Text('Set Monthly Budget'),
-          content: Column(mainAxisSize: MainAxisSize.min, children: [
-            DropdownButtonFormField<int>(
-              // ignore: deprecated_member_use
-              value: categoryId,
-              decoration: const InputDecoration(labelText: 'Category'),
-              items: categories
-                  .map((c) =>
-                      DropdownMenuItem(value: c.id, child: Text(c.name)))
-                  .toList(),
-              onChanged: (v) {
-                if (v != null) {
-                  setSt(() => categoryId = v);
-                }
-              },
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<int>(
+                  // ignore: deprecated_member_use
+                  value: categoryId,
+                  decoration: const InputDecoration(
+                      labelText: 'Category', border: OutlineInputBorder()),
+                  items: categories.map((c) =>
+                      DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
+                  onChanged: (v) {
+                    if (v != null) setSt(() => categoryId = v);
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: amountCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    // Restrict to numbers and up to 2 decimal places
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                  ],
+                  decoration: const InputDecoration(
+                      labelText: 'Monthly Limit', border: OutlineInputBorder()),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Limit is required';
+                    }
+                    final amount = double.tryParse(value.trim());
+                    if (amount == null || amount <= 0) {
+                      return 'Must be a valid positive number';
+                    }
+                    return null;
+                  },
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: amountCtrl,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Monthly Limit'),
-            ),
-          ]),
+          ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
-            ),
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel')),
             FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Save'),
-            ),
+                onPressed: () {
+                  if (formKey.currentState!.validate()) {
+                    Navigator.pop(ctx, true);
+                  }
+                },
+                child: const Text('Save')),
           ],
         ),
       ),
     );
+    
     if (ok != true) return;
-    if (!mounted) return; // <--- FIX: Async gap check
+    if (!mounted) return;
 
-    final amount = double.tryParse(amountCtrl.text.trim());
-    if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Limit must be positive.')),
-      );
-      return;
-    }
-
+    final amount = double.parse(amountCtrl.text.trim());
     final userId = context.read<AuthProvider>().user!.id;
+    
     try {
       await _service.save(userId, categoryId, _year, _month, amount);
       _load();
