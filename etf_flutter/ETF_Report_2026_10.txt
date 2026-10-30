@@ -1,0 +1,21 @@
+==============================================
+           ETF MONTHLY FINANCIAL REPORT       
+==============================================
+Period        : 10/2026
+Total Income  : 10,000.00
+Total Expenses: 5,500.00
+Net Balance   : 4,500.00
+----------------------------------------------
+
+EXPENSES BY CATEGORY
+  Utilities               5,000.00
+  Health                    500.00
+
+BUDGET STATUS
+  Category              Limit       Spent   Remaining  Status
+  Food               2,000.00        0.00    2,000.00  OK
+  Health             5,000.00      500.00    4,500.00  OK
+  Transport          2,000.00        0.00    2,000.00  OK
+  Utilities          3,000.00    5,000.00   -2,000.00  OVER
+
+==============================================
